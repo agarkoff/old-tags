@@ -21,14 +21,14 @@ func main() {
 	}
 	defer os.RemoveAll(tmpDir) // Удаляем после завершения
 
-	// Клонируем репозиторий
+	// Клонируем репозиторий (глубоко, чтобы получить .git)
 	fmt.Println("Клонируем репозиторий...")
-	cmd := exec.Command("git", "clone", "--quiet", "--depth=1", "--no-checkout", repoURL, tmpDir)
+	cmd := exec.Command("git", "clone", "--quiet", "--mirror", repoURL, tmpDir)
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("Ошибка при клонировании репозитория: %v", err)
 	}
 
-	// Получаем список тегов
+	// Получаем все теги
 	fmt.Println("Получаем список тегов...")
 	cmd = exec.Command("git", "tag")
 	cmd.Dir = tmpDir
