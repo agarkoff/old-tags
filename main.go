@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -10,15 +11,44 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Fatal("Укажите адрес Git-репозитория как аргумент")
+	repos, err := readReposFromFile("repos.txt")
+	if err != nil {
+		log.Fatalf("Ошибка при чтении файла repos.txt: %v", err)
 	}
-	repoURL := os.Args[1]
 
-	// Создаем временную директорию
+	if len(repos) == 0 {
+		log.Fatal("Файл repos.txt пуст или не содержит валидных ссылок")
+	}
+
+	for _, repoURL := range repos {
+		fmt.Printf("\n🔧 Обработка репозитория: %s\n", repoURL)
+		processRepository(repoURL)
+	}
+}
+
+func readReposFromFile(filename string) ([]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var repos []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" && !strings.HasPrefix(line, "#") {
+			repos = append(repos, line)
+		}
+	}
+	return repos, scanner.Err()
+}
+
+func processRepository(repoURL string) {
 	tmpDir, err := os.MkdirTemp("", "git-tags-*")
 	if err != nil {
-		log.Fatalf("Не удалось создать временную директорию: %v", err)
+		log.Printf("Не удалось создать временную директорию: %v\n", err)
+		return
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -26,11 +56,11 @@ func main() {
 	fmt.Println("Клонируем репозиторий...")
 	cmd := exec.Command("git", "clone", "--quiet", repoURL, tmpDir)
 	if err := cmd.Run(); err != nil {
-		log.Fatalf("Ошибка при клонировании репозитория: %v", err)
+		log.Printf("Ошибка при клонировании репозитория %s: %v\n", repoURL, err)
+		return
 	}
 
-	// Получаем список тегов с датами
-	fmt.Println("Получаем список тегов и дат...")
+	// Получаем список тегов
 	cmd = exec.Command("git", "for-each-ref",
 		"--sort=creatordate",
 		"--format=%(refname:short)|%(creatordate:iso8601)",
@@ -38,13 +68,13 @@ func main() {
 	cmd.Dir = tmpDir
 	output, err := cmd.Output()
 	if err != nil {
-		log.Fatalf("Ошибка при получении тегов: %v", err)
+		log.Printf("Ошибка при получении тегов: %v\n", err)
+		return
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	if len(lines) == 1 && lines[0] == "" {
 		fmt.Println("Теги не найдены.")
-		fmt.Println("Общее количество тегов: 0")
 		return
 	}
 
@@ -76,15 +106,15 @@ func main() {
 		}
 	}
 
-	fmt.Printf("\nОбщее количество тегов: %d\n", len(lines))
+	fmt.Printf("Всего тегов: %d\n", len(lines))
 
-	// Удаление ненужных тегов
+	// Удаление тегов
 	if len(tagsToDelete) > 0 {
-		fmt.Printf("\nУдаляются теги, не начинающиеся с 'release' и старше 1 месяца:\n")
+		fmt.Println("Удаляются неподходящие теги:")
 		for _, tag := range tagsToDelete {
-			fmt.Println("Удаление тега:", tag)
+			fmt.Println(" -", tag)
 
-			// Удаление локального тега
+			// Локальное удаление
 			delCmd := exec.Command("git", "tag", "-d", tag)
 			delCmd.Dir = tmpDir
 			err := delCmd.Run()
@@ -93,7 +123,7 @@ func main() {
 				continue
 			}
 
-			// Удаление из удалённого репозитория
+			// Удаление на origin
 			pushDelCmd := exec.Command("git", "push", "origin", "--delete", tag)
 			pushDelCmd.Dir = tmpDir
 			err = pushDelCmd.Run()
@@ -104,7 +134,7 @@ func main() {
 			}
 		}
 	} else {
-		fmt.Println("\nНет тегов для удаления.")
+		fmt.Println("Нет тегов для удаления.")
 	}
 }
 
