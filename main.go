@@ -120,7 +120,7 @@ func processRepository(repoURL string) (int, int) {
 	fmt.Println(strings.Repeat("-", 75))
 
 	now := time.Now()
-	monthAgo := now.AddDate(0, -1, 0)
+	fifteenDaysAgo := now.AddDate(0, 0, -15)
 	var tagsToDelete []string
 
 	for _, line := range lines {
@@ -139,7 +139,7 @@ func processRepository(repoURL string) (int, int) {
 			continue
 		}
 
-		if !strings.HasPrefix(tagName, "release") && createdTime.Before(monthAgo) {
+		if !strings.HasPrefix(tagName, "release") && createdTime.Before(fifteenDaysAgo) {
 			tagsToDelete = append(tagsToDelete, tagName)
 		}
 	}
